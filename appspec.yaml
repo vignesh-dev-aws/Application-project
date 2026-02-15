@@ -1,0 +1,10 @@
+version: 0.0
+Resources:
+  - TargetService:
+      Type: AWS::EKS::Kubernetes
+      Properties:
+        ClusterName: react-eks-cluster
+        Namespace: default
+        ManifestFiles:
+          - deployment.yaml
+          - service.yaml

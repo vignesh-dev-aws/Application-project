@@ -1,0 +1,45 @@
+version: 0.2
+
+env:
+ variables:
+    AWS_REGION: ap-south-1
+    CLUSTER_NAME: react-eks-cluster
+    ECR_REPO: react-app
+    ACCOUNT_ID: 460783431859
+
+phases:
+
+ install:
+    commands:
+      - echo Installing kubectl...
+      - curl -LO "https://dl.k8s.io/release/v1.28.2/bin/linux/amd64/kubectl"
+      - chmod +x kubectl
+      - mv kubectl /usr/local/bin/kubectl
+      - kubectl version --client 
+      - echo "Installing eksctl..."
+      - curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+      - sudo mv /tmp/eksctl /usr/local/bin
+      - eksctl version
+
+ pre_build:
+    commands:
+    
+      - echo Logging in to ECR...
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - echo Updating kubeconfig for EKS...
+      - aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+
+ build:
+    commands:
+      - echo Building Docker image...
+      - docker build -t $ECR_REPO:latest .
+      - docker tag $ECR_REPO:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+      - docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+
+ post_build:
+    commands:
+      - echo Deploying to EKS...
+      - aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+      - kubectl apply -f deployment.yaml
+      - kubectl apply -f service.yaml
